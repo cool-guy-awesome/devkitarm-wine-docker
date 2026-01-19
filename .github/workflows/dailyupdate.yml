@@ -25,9 +25,9 @@ jobs:
         run: |
           curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 > regctl
           chmod +x regctl
-          echo "${{ secrets.GITHUB_TOKEN }}" | ./regctl registry login ghcr.io -u ${{ github.actor }} --password-stdin
-          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --platform linux/amd64 --format '{{with .Config}}{{.Created}}{{end}}')
-          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --platform linux/amd64 --format '{{with .Config}}{{.Created}}{{end}}')
+          ./regctl registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --platform linux/amd64 --format '{{.Config.Created}}' || echo "0")
+          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --platform linux/amd64 --format '{{.Config.Created}}' || echo "0")
           
           echo "Base image (devkitARM) was built: $BASE_TIME"
           echo "My image (with Wine) was built: $MY_TIME"
