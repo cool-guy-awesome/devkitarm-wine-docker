@@ -19,4 +19,3 @@ RUN sudo mkdir -pm755 /etc/apt/keyrings && \
 ENV WINEDEBUG=-all
 ENV WINEPREFIX=/tmp/wine
 
-USER devkitpro
