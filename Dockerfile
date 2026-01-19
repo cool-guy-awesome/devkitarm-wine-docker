@@ -1,4 +1,4 @@
-FROM devkitpro/devkitpga:latest
+FROM devkitpro/devkitarm:latest
 
 USER root
 RUN dpkg --add-architecture i386 && \
