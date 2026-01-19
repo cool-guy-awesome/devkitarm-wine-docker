@@ -5,7 +5,7 @@ on:
     - cron: '0 4 * * *'
   push:
     branches: ['main']
-    paths: ['Dockerfile']
+    paths: ['./.github/workflows/dailyupdate.yml']
   workflow_dispatch:
 
 env:
