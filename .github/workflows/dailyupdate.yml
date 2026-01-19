@@ -20,13 +20,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check for updates
+      - name: Check if Base Image is newer than My Image
         id: check
-        uses: lucacome/docker-image-update-checker@v3
-        with:
-          base-image: devkitpro/devkitarm:latest
-          image: ${{ env.GHCR_IMAGE }}:latest
-          platforms: linux/amd64
+        run: |
+          curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 > regctl
+          chmod +x regctl
+          
+
+          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --format '{{.Config.Created}}')
+          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --format '{{.Config.Created}}')
+          
+          echo "Base image was built: $BASE_TIME"
+          echo "My image was built: $MY_TIME"
+          
+          if [[ "$BASE_TIME" > "$MY_TIME" ]]; then
+            echo "Update found!"
+            echo "needs-updating=true" >> $GITHUB_OUTPUT
+          else
+            echo "No update needed."
+            echo "needs-updating=false" >> $GITHUB_OUTPUT
+          fi
       - name: Login to Docker Hub
         if: steps.check.outputs.needs-updating == 'true'
         uses: docker/login-action@v3
