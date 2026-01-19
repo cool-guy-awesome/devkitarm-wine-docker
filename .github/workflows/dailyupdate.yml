@@ -3,6 +3,9 @@ name: Daily Upstream Check & Rebuild
 on:
   schedule:
     - cron: '0 4 * * *'
+  push:
+    branches: ['main']
+    paths: ['Dockerfile']
   workflow_dispatch:
 
 env:
@@ -20,23 +23,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check if Base Image is newer than My Image
+      - name: Check if Base Image SHA has changed
         id: check
         run: |
           curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 > regctl
           chmod +x regctl
-          ./regctl registry login ghcr.io -u ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --platform linux/amd64 --format '{{.Config.Created}}' || echo "0")
-          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --platform linux/amd64 --format '{{.Config.Created}}' || echo "0")
+
+
+          REMOTE_SHA=$(./regctl image digest devkitpro/devkitarm:latest --platform linux/amd64)
           
-          echo "Base image (devkitARM) was built: $BASE_TIME"
-          echo "My image (with Wine) was built: $MY_TIME"
-          
-          if [[ "$BASE_TIME" > "$MY_TIME" ]]; then
-            echo "Update found! Base image is newer."
+
+          MY_IMAGE_BASE_SHA=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --format '{{index .Config.History 0}}' | grep -oE "sha256:[a-z0-9]+") || echo "none"
+
+          echo "Current devkitARM SHA: $REMOTE_SHA"
+          echo "My image was built using: $MY_IMAGE_BASE_SHA"
+
+          if [ "$REMOTE_SHA" != "$MY_IMAGE_BASE_SHA" ]; then
+            echo "Update found! SHA mismatch."
             echo "needs-updating=true" >> $GITHUB_OUTPUT
           else
-            echo "No update needed. My image is up to date."
+            echo "No update needed. SHAs match."
             echo "needs-updating=false" >> $GITHUB_OUTPUT
           fi
       - name: Login to Docker Hub
