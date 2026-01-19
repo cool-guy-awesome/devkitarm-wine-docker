@@ -25,19 +25,18 @@ jobs:
         run: |
           curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 > regctl
           chmod +x regctl
+          echo "${{ secrets.GITHUB_TOKEN }}" | ./regctl registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --platform linux/amd64 --format '{{with .Config}}{{.Created}}{{end}}')
+          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --platform linux/amd64 --format '{{with .Config}}{{.Created}}{{end}}')
           
-
-          BASE_TIME=$(./regctl image inspect devkitpro/devkitarm:latest --format '{{.Config.Created}}')
-          MY_TIME=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --format '{{.Config.Created}}')
-          
-          echo "Base image was built: $BASE_TIME"
-          echo "My image was built: $MY_TIME"
+          echo "Base image (devkitARM) was built: $BASE_TIME"
+          echo "My image (with Wine) was built: $MY_TIME"
           
           if [[ "$BASE_TIME" > "$MY_TIME" ]]; then
-            echo "Update found!"
+            echo "Update found! Base image is newer."
             echo "needs-updating=true" >> $GITHUB_OUTPUT
           else
-            echo "No update needed."
+            echo "No update needed. My image is up to date."
             echo "needs-updating=false" >> $GITHUB_OUTPUT
           fi
       - name: Login to Docker Hub
