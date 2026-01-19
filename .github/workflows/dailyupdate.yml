@@ -1,11 +1,8 @@
-name: Daily Upstream Check & Rebuild
+name: Daily Build with File Tracking
 
 on:
   schedule:
     - cron: '0 4 * * *'
-  push:
-    branches: ['main']
-    paths: ['./.github/workflows/dailyupdate.yml']
   workflow_dispatch:
 
 env:
@@ -13,59 +10,49 @@ env:
   GHCR_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  check-and-rebuild:
+  rebuild-if-needed:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check if Base Image SHA has changed
-        id: check
+      - name: Get Remote SHA
+        id: get-sha
         run: |
+
           curl -L https://github.com/regclient/regclient/releases/latest/download/regctl-linux-amd64 > regctl
           chmod +x regctl
-
-
-          REMOTE_SHA=$(./regctl image digest devkitpro/devkitarm:latest --platform linux/amd64)
           
 
-          MY_IMAGE_BASE_SHA=$(./regctl image inspect ${{ env.GHCR_IMAGE }}:latest --format '{{index .Config.History 0}}' | grep -oE "sha256:[a-z0-9]+") || echo "none"
+          REMOTE_SHA=$(./regctl image digest devkitpro/devkitarm:latest --platform linux/amd64)
+          echo "remote_sha=$REMOTE_SHA" >> $GITHUB_OUTPUT
+          
 
-          echo "Current devkitARM SHA: $REMOTE_SHA"
-          echo "My image was built using: $MY_IMAGE_BASE_SHA"
+          OLD_SHA=$(cat latest_sha.txt 2>/dev/null || echo "none")
+          echo "old_sha=$OLD_SHA" >> $GITHUB_OUTPUT
 
-          if [ "$REMOTE_SHA" != "$MY_IMAGE_BASE_SHA" ]; then
-            echo "Update found! SHA mismatch."
-            echo "needs-updating=true" >> $GITHUB_OUTPUT
-          else
-            echo "No update needed. SHAs match."
-            echo "needs-updating=false" >> $GITHUB_OUTPUT
-          fi
-      - name: Login to Docker Hub
-        if: steps.check.outputs.needs-updating == 'true'
-        uses: docker/login-action@v3
+      - name: Rebuild and Push
+        if: steps.get-sha.outputs.remote_sha != steps.get-sha.outputs.old_sha
+        run: |
+
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USERNAME }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          
+
+          docker build -t ${{ env.DOCKER_IMAGE }}:latest -t ${{ env.GHCR_IMAGE }}:latest .
+          docker push ${{ env.DOCKER_IMAGE }}:latest
+          docker push ${{ env.GHCR_IMAGE }}:latest
+          
+
+          echo "${{ steps.get-sha.outputs.remote_sha }}" > latest_sha.txt
+
+      - name: Commit SHA Update
+        if: steps.get-sha.outputs.remote_sha != steps.get-sha.outputs.old_sha
+        uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GHCR
-        if: steps.check.outputs.needs-updating == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push
-        if: steps.check.outputs.needs-updating == 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.DOCKER_IMAGE }}:latest
-            ${{ env.GHCR_IMAGE }}:latest
+          commit_message: "chore: update tracked devkitarm SHA [skip ci]"
+          file_pattern: 'latest_sha.txt'
