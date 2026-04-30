@@ -33,10 +33,12 @@ jobs:
 
           REMOTE_SHA=$(./regctl image digest devkitpro/devkitarm:latest --platform linux/amd64)
           echo "remote_sha=$REMOTE_SHA" >> $GITHUB_OUTPUT
+          echo $REMOTE_SHA
           
 
           OLD_SHA=$(cat latest_sha.txt 2>/dev/null || echo "none")
           echo "old_sha=$OLD_SHA" >> $GITHUB_OUTPUT
+          echo $OLD_SHA
 
       - name: Rebuild and Push
         if: steps.get-sha.outputs.remote_sha != steps.get-sha.outputs.old_sha
